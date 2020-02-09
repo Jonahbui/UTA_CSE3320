@@ -13,10 +13,26 @@
 #define MAX_ARGS_SIZE 10
 #define WHITESPACE " \t\n"
 
+/* Name: Free char* array
+ * Purpose: to free an array of char* that have malloc elements.
+ * Parameters: 
+ * -charArray: the array of char* to be freed
+ * -size: the number of elements in the array to free
+ *  Returns: nothing, just frees.
+ */
+void freeCharPArray(char** charArray, int size)
+{
+    int i;
+    for(i = 0; i < size; i++)
+    {
+        free(charArray[i]);
+    }
+}
+
 int main(int argc, char** argv)
 {
     //Use to store user input for commands and for parsing
-    char* cmd_str = (char*)malloc(MAX_INPUT_SIZE);
+    char* cmd_str = (char*)malloc(MAX_INPUT_SIZE);  //MALLOC
     
     //Use to store the ID of child processes and keep track of how many have spawned
     int pids[15];
@@ -25,10 +41,10 @@ int main(int argc, char** argv)
     //Use to store history so that users may view it and reuse them
     char* history[15];
     int i;
-    static int count = 0;
+    int history_count = 0;
     for(i = 0; i < 15; i++)
     {
-        history[i] = (char*)malloc(MAX_INPUT_SIZE);
+        history[i] = (char*)malloc(MAX_INPUT_SIZE); //MALLOC
         memset(history[i], 0, MAX_INPUT_SIZE);
     }
 
@@ -45,7 +61,7 @@ int main(int argc, char** argv)
             {
                 break;
             }
-            else if(strpbrk(cmd_str, "!1234567890") != NULL)
+            else if(strpbrk(cmd_str, "!") != NULL)
             {
                 //Checks if user is reusing command in history with matching index number
                 //There is an attempt to use history if ! is found in the cmd_str
@@ -55,7 +71,7 @@ int main(int argc, char** argv)
                 //Allow user to reuse previous commands if in range
                 //Range: cannot be greater than size of current history if less than 15.
                 //Cannot also be greater than 15.
-                if(history_num <= count && history_num <= 15)
+                if(history_num <= history_count && history_num <= 15)
                 {
                     strcpy(cmd_str, history[history_num]);
                 }
@@ -68,8 +84,7 @@ int main(int argc, char** argv)
             }
 
             //Store history to print and increment counter to track size of history
-            strcpy(history[count%15], cmd_str);
-            count++;
+            strcpy(history[history_count++%15], cmd_str);
                 
             //Get the name of the executable
             char* token = strtok(cmd_str, WHITESPACE);
@@ -82,7 +97,7 @@ int main(int argc, char** argv)
             //Use the tokens to pass as parameters for execvp()
             while(token != NULL && token_count < MAX_ARGS_SIZE)
             {
-                args[token_count] = (char*)malloc(MAX_INPUT_SIZE);
+                args[token_count] = (char*)malloc(MAX_INPUT_SIZE);  //MALLOC
                 strcpy(args[token_count], token);
                 if(strlen(args[token_count]) == 0)
                 {
@@ -94,7 +109,7 @@ int main(int argc, char** argv)
             //Set all remaining arguments to NULL since there must be a NULL when using exec
             for(i = token_count; i < MAX_ARGS_SIZE; i++)
             {
-                args[token_count++] = NULL;     
+                args[i] = NULL;     
             }
             
             //Run commands entered that do not require fork
@@ -102,40 +117,36 @@ int main(int argc, char** argv)
             {
                 //Free all mallocs before exiting
                 free(cmd_str);
-                for(i = 0; i < 15; i++)
-                {
-                    free(history[i]);
-                }
-                for(i = 0; i < token_count; i++)
-                {
-                    free(args[i]);
-                }
+                freeCharPArray(history, 15);
+                freeCharPArray(args, token_count);
                 return 0;
             }
             else if(strcmp(args[0], "showpids") == 0)
             {
                 //Shows last 15 PID ID's. Note: wraps around after 15
-                printf("PID count = %d\n", pid_count);
                 for(i = 0; i < pid_count && i < 15; i++)
                 {
-                    printf("PID %d: %d\n", i, pids[i]);
+                    printf("PID %d: %d\n", i+1, pids[i]);
                 }
+                freeCharPArray(args, token_count);
                 break;
             }
             else if(strcmp(args[0], "history") == 0)
             {
                 //Shows last 15 commands. Note: wraps around after 15
-                for(i = 0; i < count && i < 15; i++)
+                for(i = 0; i < history_count && i < 15; i++)
                 {
                     printf("%d: %s", i+1, history[i]);
                 }
+                freeCharPArray(args, token_count);
                 break;
             }
             else if(strcmp(args[0], "cd") == 0)
             {
                 //Changes the directory. Will only change directory if arg count greater than 1
-                //Typing cd will not move anywhere
+                //Typing cd will not move anywherke
                 chdir(args[1]);
+                freeCharPArray(args, token_count);
                 break;
             }
         
@@ -169,11 +180,8 @@ int main(int argc, char** argv)
                 pids[pid_count++%15] = pid;
                 
                 //Reset arguments and counter for the next possible execution
-                //Prevent the program from reusing previous arguements
-                for(i = 0; i < token_count; i++)
-                {
-                    free(args[i]);
-                }
+                //Prevents the program from reusing previous arguements
+                freeCharPArray(args, token_count);
                 token_count = 0;
                 break;
             }
