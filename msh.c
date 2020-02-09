@@ -9,8 +9,10 @@
 #include <string.h>
 #include <signal.h>
 
+//Max size the user can enter one command
 #define MAX_INPUT_SIZE 1024
-#define MAX_ARGS_SIZE 10
+//10 args + 1 NULL, used in case the maximum of 10 args and we need a null at the end
+#define MAX_ARGS_SIZE 11
 #define WHITESPACE " \t\n"
 
 /* Name: Free char* array
@@ -47,12 +49,22 @@ int main(int argc, char** argv)
         history[i] = (char*)malloc(MAX_INPUT_SIZE); //MALLOC
         memset(history[i], 0, MAX_INPUT_SIZE);
     }
+        
+    //Use to store the arguments of the executable
+    char* args[MAX_ARGS_SIZE];
+    int token_count = 0;
 
     //Loop the program forever until the user quits/exits
     while(1)
     {
         printf("msh> ");
 
+        //Reset the args to avoid previous values from possibly being used
+        if(token_count !=0)
+        {
+            freeCharPArray(args, token_count);
+            token_count = 0;
+        }
         //Repeatedly get user command input until exit/quit
         while(fgets(cmd_str, MAX_INPUT_SIZE, stdin) != NULL)
         {
@@ -69,7 +81,7 @@ int main(int argc, char** argv)
                 int history_num = atoi(token)-1;
                 
                 //Allow user to reuse previous commands if in range
-                //Range: cannot be greater than size of current history if less than 15.
+                //Range: cannot be greater than size of current history when it is less than 15.
                 //Cannot also be greater than 15.
                 if(history_num <= history_count && history_num <= 15)
                 {
@@ -88,29 +100,22 @@ int main(int argc, char** argv)
                 
             //Get the name of the executable
             char* token = strtok(cmd_str, WHITESPACE);
-            
-            //Use to store the arguments of the executable
-            char* args[MAX_ARGS_SIZE];
-            int token_count = 0;
                     
             //Parse the string into tokens until the max count is reached
-            //Use the tokens to pass as parameters for execvp()
-            while(token != NULL && token_count < MAX_ARGS_SIZE)
+            //Use the tokens to pass as parameters for execvp(). 
+            //Run with MAX_ARGS_SIZE-1 so we can put NULL at end
+            while(token != NULL && token_count < MAX_ARGS_SIZE-1)
             {
                 args[token_count] = (char*)malloc(MAX_INPUT_SIZE);  //MALLOC
                 strcpy(args[token_count], token);
                 if(strlen(args[token_count]) == 0)
-                {
                     args[token_count] = NULL;
-                }
                 token = strtok(NULL, WHITESPACE);
                 token_count++;
             }
             //Set all remaining arguments to NULL since there must be a NULL when using exec
             for(i = token_count; i < MAX_ARGS_SIZE; i++)
-            {
                 args[i] = NULL;     
-            }
             
             //Run commands entered that do not require fork
             if(strcmp(args[0], "quit") == 0 || strcmp(args[0], "exit") == 0)
@@ -125,20 +130,14 @@ int main(int argc, char** argv)
             {
                 //Shows last 15 PID ID's. Note: wraps around after 15
                 for(i = 0; i < pid_count && i < 15; i++)
-                {
                     printf("PID %d: %d\n", i+1, pids[i]);
-                }
-                freeCharPArray(args, token_count);
                 break;
             }
             else if(strcmp(args[0], "history") == 0)
             {
                 //Shows last 15 commands. Note: wraps around after 15
                 for(i = 0; i < history_count && i < 15; i++)
-                {
                     printf("%d: %s", i+1, history[i]);
-                }
-                freeCharPArray(args, token_count);
                 break;
             }
             else if(strcmp(args[0], "cd") == 0)
@@ -146,7 +145,6 @@ int main(int argc, char** argv)
                 //Changes the directory. Will only change directory if arg count greater than 1
                 //Typing cd will not move anywherke
                 chdir(args[1]);
-                freeCharPArray(args, token_count);
                 break;
             }
         
@@ -158,9 +156,7 @@ int main(int argc, char** argv)
 
                 //If the exec failed, print out which command failed
                 if(ret == -1)
-                {
                     printf("%s: Command not found.\n", args[0]);
-                }
                 return 0;
                 exit(EXIT_SUCCESS);
             }
@@ -178,11 +174,6 @@ int main(int argc, char** argv)
                 
                 //Store the pids. Wraps after 15 pids inserted
                 pids[pid_count++%15] = pid;
-                
-                //Reset arguments and counter for the next possible execution
-                //Prevents the program from reusing previous arguements
-                freeCharPArray(args, token_count);
-                token_count = 0;
                 break;
             }
         }
