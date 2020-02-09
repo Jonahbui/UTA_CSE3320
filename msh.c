@@ -143,8 +143,11 @@ int main(int argc, char** argv)
             else if(strcmp(args[0], "cd") == 0)
             {
                 //Changes the directory. Will only change directory if arg count greater than 1
-                //Typing cd will not move anywherke
-                chdir(args[1]);
+                //Check for NULL path to avoid chdir() throwing errors about unreachable path
+                if(args[1] == NULL)
+                    chdir("");
+                else
+                    chdir(args[1]);
                 break;
             }
         
