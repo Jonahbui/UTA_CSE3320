@@ -60,11 +60,17 @@ typedef enum bool
  * code that you develop. 
  */
 
-static bool can_a_enter;
-static bool can_b_enter;
+static bool can_a_enter;		/* Allows class a students to enter office */
+static bool can_b_enter;		/* Allows class b students to enter office */
+static bool is_a_inline;		/* Checks if there is a class a student waiting in line */
+static bool is_b_inline;		/* Checks if there is a class b student waiting in line */
 
-pthread_mutex_t mutex;
-sem_t sem;
+static int classa_answered;		/* Keep track of consecutive class a students answered */
+static int classb_answered;		/* Keep track of consecutive class b students answered */
+
+sem_t sem_a;					/* Prevents students from class a from all entering at once */
+sem_t sem_b;					/* Prevents students from class b from all entering at once */
+sem_t sem_leave;				/* Prevents all students from modifying variables when leaving */
 
 static int students_in_office;   /* Total numbers of students currently in the office */
 static int classa_inoffice;      /* Total numbers of students from class A currently in the office */
@@ -97,8 +103,17 @@ static int initialize(student_info *si, char *filename)
 	can_a_enter = false;
 	can_b_enter = false;
 	
-	sem_init(&sem, 0, 1);
+	is_a_inline = false;
+	is_b_inline = false;
 	
+	classa_answered = 0;
+	classb_answered = 0;
+	
+	sem_init(&sem_a, 0, 1);
+	sem_init(&sem_b, 0, 1);
+	sem_init(&sem_leave, 0, 1);
+	
+	//pthread_mutex_init( & mutex, NULL );
 
     /* Read in the data file and initialize the student array */
     FILE *fp;
@@ -150,42 +165,106 @@ void *professorthread(void *junk)
         /* of available seats, which class a student is in,           */
         /* and whether the professor needs a break. You need to add   */
         /* all of this.                                               */
-
+		
+		// Allows teacher to take break
 		if(students_since_break == 10)
 		{
-			sem_wait(&sem);	// Stop incoming students
-			{
-				
-				while(students_in_office != 0);	// Finish all questions before taking a break
-				take_break();				
-			}
-			sem_post(&sem);
+			// Prevent further students from entering the office
+			can_a_enter = false;
+			can_b_enter = false;
+			
+			// Finish all questions before taking a break
+			// Don't want to ask questions during professors break time
+			// Also allow office to clear, so new students may enter later on
+			while(students_in_office != 0);
+			take_break();
+			continue;
 		}
-		else
+
+		// If 5 consecutive students met, switch to other class
+		if(classa_answered == 5)
 		{
-			if(students_in_office == MAX_SEATS)
+			// Stop all incoming students and finish answering remaining questions
+			// Prevent from answering more questions from class a and allow b to enter
+			can_a_enter = false;
+			can_b_enter = false;;
+			while(students_in_office > 0);
+			
+			// If: allows student from class b in and waits for first class b student to come in
+			// Prevents student from class a slipping into the room
+			// Else: there are no studnts in line, continue letting original class in
+			// Prevents deadlock waiting for non-existing b student
+			if(is_b_inline)
 			{
-				can_a_enter = false;
-				can_b_enter = false;
+				can_b_enter = true;
+				while(classb_inoffice == 0);
 			}
 			else
 			{
-				if(classa_inoffice == 0 && classb_inoffice > 0)
-				{
-					can_a_enter = false;
-					can_b_enter = true;
-				}
-				else if(classb_inoffice == 0 && classa_inoffice > 0)
-				{
-					can_a_enter = true;
-					can_b_enter = false;
-				}
-				else
-				{
-					can_a_enter = true;
-					can_b_enter = true;					
-				}
+				can_a_enter = true;
 			}
+			classa_answered = 0;	// Reset consecutive streak for switching classes
+			continue;
+		}
+		else if(classb_answered == 5)
+		{
+			// Stop all incoming students and finish answering remaining questions
+			// Prevent from answering more questions from class b and allow a to enter
+			can_a_enter = false;
+			can_b_enter = false;;
+			while(students_in_office > 0);
+			
+			// If: allows student from class a in and waits for first class a student to come in
+			// Prevents student from class b slipping into the room
+			// Else: there are no studnts in line, continue letting original class in
+			// Prevents deadlock waiting for non-existing a student
+			if(is_b_inline)
+			{
+				can_a_enter = true;
+				while(classa_inoffice == 0);
+			}
+			else
+			{
+				can_b_enter = true;
+			}
+			classb_answered = 0;	// Reset consecutive streak for switching classes
+			continue;
+		}
+
+		// If office is full, don't let anyone else in
+		if(students_in_office == MAX_SEATS)
+		{
+			can_a_enter = false;
+			can_b_enter = false;
+			continue;
+		}
+		
+		// If: there are no students in the office at all, arbitrarily let one class in
+		// Prevents deadlock, waiting for a certain class to come in (same for else-if case)
+		if(students_in_office == 0 && is_a_inline)
+		{
+			can_a_enter = true;
+			can_b_enter = false;
+			continue;
+		}
+		else if(students_in_office == 0 && is_b_inline)
+		{
+			can_a_enter = false;
+			can_b_enter = true;
+			continue;
+		}
+		
+		// If: there are students occupying the office, continue letting one specific class in
+		// Prevents students from differing clases from walking into each others sessions
+		if(classa_inoffice > 0 && classb_inoffice == 0)
+		{
+			can_a_enter = true;
+			can_b_enter = false;
+		}
+		else if(classb_inoffice && classa_inoffice == 0)
+		{
+			can_a_enter = false;
+			can_b_enter = true;
 		}
     } 
     pthread_exit(NULL);
@@ -204,18 +283,31 @@ void classa_enter()
     /* synchronization for the simulations variables below                  */
     /*  YOUR CODE HERE.                                                     */ 
 	
-	// Prevent student wait for office
-	sem_wait(&sem);
+	// Make student wait in line
+	sem_wait(&sem_a);
 	{
+		// Person who grabs semaphore is next line line
 		// Wait until professor signals student to come in
-		while(!can_a_enter);
+		while(!can_a_enter)
+		{
+			is_a_inline = true;	// Use to check if there is a student waiting for the professor
+		}
+		is_a_inline = false;
 		
 		// Let student enter office
 		students_in_office += 1;
 		students_since_break += 1;
 		classa_inoffice += 1;
+		
+		// Increment consecutive amount of students from class b answered
+		assert(classa_answered <= 5);
+		if(classb_answered > 0)
+			classa_answered = 1;	// Reset if someone from class a had their question answered
+		else
+			classa_answered++;
 	}
-	sem_post(&sem);
+	sem_post(&sem_a);
+	
 }
 
 /* Code executed by a class B student to enter the office.
@@ -230,18 +322,30 @@ void classb_enter()
     /* synchronization for the simulations variables below                  */
     /*  YOUR CODE HERE.                                                     */ 
 	
-	// Prevent student wait for office
-	sem_wait(&sem);
+	// Make student wait in line
+	sem_wait(&sem_b);
 	{
+		// Person who grabs semaphore is next line line
 		// Wait until professor signals student to come in
-		while(!can_b_enter);
+		while(!can_b_enter)
+		{
+			is_b_inline = true;	// Use to check if there is a student waiting for the professor
+		}
+		is_b_inline = false;
 		
 		// Let student enter office
 		students_in_office += 1;
 		students_since_break += 1;
 		classb_inoffice += 1;
+		
+		// Increment consecutive amount of students from class b answered
+		assert(classb_answered <= 5);
+		if(classa_answered > 0)
+			classb_answered = 1;	// Reset if someone from class a had their question answered
+		else
+			classb_answered++;
 	}
-	sem_post(&sem);
+	sem_post(&sem_b);
 }
 
 /* Code executed by a student to simulate the time he spends in the office asking questions
@@ -263,10 +367,13 @@ static void classa_leave()
     *  TODO
     *  YOUR CODE HERE. 
     */
-
-    students_in_office -= 1;
-    classa_inoffice -= 1;
-
+	
+	sem_wait(&sem_leave);
+	{
+		students_in_office -= 1;
+		classa_inoffice -= 1;
+	}
+	sem_post(&sem_leave);
 }
 
 /* Code executed by a class B student when leaving the office.
@@ -279,10 +386,13 @@ static void classb_leave()
     * TODO
     * YOUR CODE HERE. 
     */
-
-    students_in_office -= 1;
-    classb_inoffice -= 1;
-
+	
+	sem_wait(&sem_leave);
+	{
+		students_in_office -= 1;
+		classb_inoffice -= 1;
+	}
+	sem_post(&sem_leave);
 }
 
 /* Main code for class A student threads.  
@@ -292,10 +402,9 @@ static void classb_leave()
 void* classa_student(void *si) 
 {
     student_info *s_info = (student_info*)si;
-
+	
     /* enter office */
     classa_enter();
-
     printf("Student %d from class A enters the office\n", s_info->student_id);
 
     assert(students_in_office <= MAX_SEATS && students_in_office >= 0);
