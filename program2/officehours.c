@@ -469,75 +469,78 @@ void* classb_student(void *si)
  */
 int main(int nargs, char **args) 
 {
-  int i;
-  int result;
-  int student_type;
-  int num_students;
-  void *status;
-  pthread_t professor_tid;
-  pthread_t student_tid[MAX_STUDENTS];
-  student_info s_info[MAX_STUDENTS];
+	int i;
+	int result;
+	int student_type;
+	int num_students;
+	void *status;
+	pthread_t professor_tid;
+	pthread_t student_tid[MAX_STUDENTS];
+	student_info s_info[MAX_STUDENTS];
 
-  if (nargs != 2) 
-  {
-    printf("Usage: officehour <name of inputfile>\n");
-    return EINVAL;
-  }
+	if (nargs != 2) 
+	{
+		printf("Usage: officehour <name of inputfile>\n");
+		return EINVAL;
+	}
 
-  num_students = initialize(s_info, args[1]);
-  if (num_students > MAX_STUDENTS || num_students <= 0) 
-  {
-    printf("Error:  Bad number of student threads. "
-           "Maybe there was a problem with your input file?\n");
-    return 1;
-  }
+	num_students = initialize(s_info, args[1]);
+	if (num_students > MAX_STUDENTS || num_students <= 0) 
+	{
+		printf("Error:  Bad number of student threads. "
+		"Maybe there was a problem with your input file?\n");
+		return 1;
+	}
 
-  printf("Starting officehour simulation with %d students ...\n",
-    num_students);
+	printf("Starting officehour simulation with %d students ...\n",
+	num_students);
 
-  result = pthread_create(&professor_tid, NULL, professorthread, NULL);
+	result = pthread_create(&professor_tid, NULL, professorthread, NULL);
 
-  if (result) 
-  {
-    printf("officehour:  pthread_create failed for professor: %s\n", strerror(result));
-    exit(1);
-  }
+	if (result) 
+	{
+		printf("officehour:  pthread_create failed for professor: %s\n", strerror(result));
+		exit(1);
+	}
 
-  for (i=0; i < num_students; i++) 
-  {
+	for (i=0; i < num_students; i++) 
+	{
+		s_info[i].student_id = i;
+		sleep(s_info[i].arrival_time);
+			
+		student_type = random() % 2;
 
-    s_info[i].student_id = i;
-    sleep(s_info[i].arrival_time);
-                
-    student_type = random() % 2;
+		if (s_info[i].class == CLASSA)
+		{
+			result = pthread_create(&student_tid[i], NULL, classa_student, (void *)&s_info[i]);
+		}
+		else // student_type == CLASSB
+		{
+			result = pthread_create(&student_tid[i], NULL, classb_student, (void *)&s_info[i]);
+		}
 
-    if (s_info[i].class == CLASSA)
-    {
-      result = pthread_create(&student_tid[i], NULL, classa_student, (void *)&s_info[i]);
-    }
-    else // student_type == CLASSB
-    {
-      result = pthread_create(&student_tid[i], NULL, classb_student, (void *)&s_info[i]);
-    }
+		if (result) 
+		{
+			printf("officehour: thread_fork failed for student %d: %s\n", 
+			i, strerror(result));
+			exit(1);
+		}
+	}
 
-    if (result) 
-    {
-      printf("officehour: thread_fork failed for student %d: %s\n", 
-            i, strerror(result));
-      exit(1);
-    }
-  }
+	/* wait for all student threads to finish */
+	for (i = 0; i < num_students; i++) 
+	{
+		pthread_join(student_tid[i], &status);
+	}
 
-  /* wait for all student threads to finish */
-  for (i = 0; i < num_students; i++) 
-  {
-    pthread_join(student_tid[i], &status);
-  }
+	/* tell the professor to finish. */
+	pthread_cancel(professor_tid);
 
-  /* tell the professor to finish. */
-  pthread_cancel(professor_tid);
-
-  printf("Office hour simulation done.\n");
+	sem_destroy(&sem_a);
+	sem_destroy(&sem_b);
+	sem_destroy(&sem_leave);
+	
+	printf("Office hour simulation done.\n");
 
   return 0;
 }
