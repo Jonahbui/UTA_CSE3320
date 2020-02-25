@@ -165,7 +165,11 @@ void *professorthread(void *junk)
         /* of available seats, which class a student is in,           */
         /* and whether the professor needs a break. You need to add   */
         /* all of this.                                               */
-		
+        
+        // Once one student enters, give the professor time to check if another can enter    
+        can_a_enter = false;
+        can_b_enter = false;
+
 		// Allows teacher to take break
 		if(students_since_break == 10)
 		{
