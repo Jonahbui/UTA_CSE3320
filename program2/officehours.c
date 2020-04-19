@@ -70,9 +70,9 @@ static int num_b_inline;        /* Checks if there is a class b student waiting 
 static int classa_answered;     /* Keep track of consecutive class a students answered */
 static int classb_answered;     /* Keep track of consecutive class b students answered */
 
-pthread_mutex_t mutex_a;                    /* Prevents students from class a from all entering at once */
-pthread_mutex_t mutex_b;                    /* Prevents students from class b from all entering at once */
-pthread_mutex_t mutex_leave;                /* Prevents all students from modifying variables when leaving */
+pthread_mutex_t mutex_a;        /* Prevents students from class a from all entering at once */
+pthread_mutex_t mutex_b;        /* Prevents students from class b from all entering at once */
+pthread_mutex_t mutex_leave;    /* Prevents all students from modifying variables when leaving */
 
 static int students_in_office;   /* Total numbers of students currently in the office */
 static int classa_inoffice;      /* Total numbers of students from class A currently in office */
@@ -187,6 +187,14 @@ void *professorthread(void *junk)
             continue;
         }
 
+        // If office is full, don't let anyone else in
+        if(students_in_office == MAX_SEATS)
+        {
+            can_a_enter = false;
+            can_b_enter = false;
+            continue;
+        }
+
         // If 5 consecutive students met, switch to other class
         if(classa_answered == 5)
         {
@@ -236,19 +244,11 @@ void *professorthread(void *junk)
             classb_answered = 0;    // Reset consecutive streak for switching classes
             continue;
         }
-
-        // If office is full, don't let anyone else in
-        if(students_in_office == MAX_SEATS)
-        {
-            can_a_enter = false;
-            can_b_enter = false;
-            continue;
-        }
         
         // If: there are no students in the office and they're waiting, arbitrarily let one class in
         // Prevents deadlock, waiting for a certain class to come in (same for else-if case 1)
-		// If no one is present in the office and line, wait...
-		while(num_a_inline == 0 && num_b_inline == 0);
+        // If no one is present in the office and line, wait...
+        while(num_a_inline == 0 && num_b_inline == 0);
         if(students_in_office == 0 && num_a_inline > 0)
         {
             can_a_enter = true;
@@ -261,10 +261,10 @@ void *professorthread(void *junk)
             can_b_enter = true;
             continue;
         }
-		else if(students_in_office == 0 && num_a_inline == 0 && num_b_inline == 0)
-		{
-			continue;
-		}
+        else if(students_in_office == 0 && num_a_inline == 0 && num_b_inline == 0)
+        {
+            continue;
+        }
         
         // If: there are students occupying the office, continue letting one specific class in
         // Prevents students from differing clases from walking into each others sessions
@@ -295,7 +295,7 @@ void classa_enter()
     {
         // Person who grabs semaphore is next line line
         // Wait until professor signals student to come in
-		
+        
         while(!can_a_enter);
         num_a_inline--;
         
@@ -307,11 +307,14 @@ void classa_enter()
         // Increment consecutive amount of students from class a answered
         assert(classa_answered <= 5);
         if(classb_answered > 0)
+        {
             classa_answered = 1;    // Reset if someone from class a had their question answered
+            classb_answered = 0;
+        }
         else
             classa_answered++;
-		
-		can_a_enter = false;
+        
+        can_a_enter = false;
     }
     pthread_mutex_unlock(&mutex_a);
     
@@ -323,7 +326,7 @@ void classa_enter()
  */
 void classb_enter() 
 {
-	num_b_inline++; // Use to check if there is a student waiting for the professor  
+    num_b_inline++; // Use to check if there is a student waiting for the professor  
     // Make student wait in line
     pthread_mutex_lock(&mutex_b);
     {
@@ -341,11 +344,14 @@ void classb_enter()
         // Increment consecutive amount of students from class b answered
         assert(classb_answered <= 5);
         if(classa_answered > 0)
-            classb_answered = 1;    // Reset if someone from class a had their question answered
+        {
+            classa_answered = 0;    // Reset if someone from class a had their question answered
+            classb_answered = 1;
+        }
         else
             classb_answered++;
-		
-		can_b_enter = false;
+        
+        can_b_enter = false;
     }
     pthread_mutex_unlock(&mutex_b);
 }
@@ -379,7 +385,7 @@ static void classa_leave()
  */
 static void classb_leave() 
 {
-	pthread_mutex_lock(&mutex_leave);
+    pthread_mutex_lock(&mutex_leave);
     {
         students_in_office -= 1;
         classb_inoffice -= 1;
