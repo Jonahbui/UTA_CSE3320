@@ -6,3 +6,4 @@ HFILES = compare.h queue.h
 
 all :
 	gcc -g $(SRC1) $(SRC2) $(SRC3) $(HFILES) -o $(EXE)
+	
