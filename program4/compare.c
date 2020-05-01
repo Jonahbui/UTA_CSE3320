@@ -1,3 +1,8 @@
+/* Author: Jonah Bui
+ * ID: 1001541383
+ * Parnter: Burhanuddin Chinwala
+ * ID: 1001578263
+ */
 // The MIT License (MIT)
 // 
 // Copyright (c) 2019 Trevor Bakker 

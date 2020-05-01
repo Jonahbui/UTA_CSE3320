@@ -1,7 +1,8 @@
-/* Authors: Jonah Bui
+/* Author: Jonah Bui
  * ID: 1001541383
  * Parnter: Burhanuddin Chinwala
- * ID: 100154
+ * ID: 1001578263
+ * Purpose: make a program to read in a fat32 filesystem.
  */
 
 /* To do list:
