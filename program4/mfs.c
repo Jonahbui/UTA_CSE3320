@@ -137,7 +137,7 @@ void Print_Directory(struct DirectoryEntry dir[16])
     {
       // Do not printed out any files that have been deleted. Don't want users seeing them.
       if(dir[i].Name[0] == 0xe5)
-        return;
+        continue;
 
       // If the file: is read-only file, describes a subdirectory, or is a modified file, then
       // print it out for the user to see.
