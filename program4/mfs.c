@@ -312,10 +312,14 @@ int main()
         printf("Error: File system not open\n\n");
         continue;
       }
-      fclose(fp);
-      fp = NULL;
-      free(info);
-      info = NULL;
+      else
+      {
+        fclose(fp);
+        fp = NULL;
+        free(info);
+        info = NULL;
+      }
+
     }
     else if(strcmp(token[0], "quit") == 0)
     {
@@ -336,7 +340,7 @@ int main()
     }
     else if(fp)
     {
-      if(strcmp(token[0], "info") == 0)// GOOD Break
+      if(strcmp(token[0], "info") == 0)
       {
         printf("\nBPB_BytesPerSec:  \nDec: %4d\n", info->BPB_BytesPerSec);
         printf("Hex: %4x\n\n", info->BPB_BytesPerSec);
@@ -349,7 +353,7 @@ int main()
         printf("BPB_FATSz32:     \nDec: %4d\n", info->BPB_FATSz32);
         printf("Hex: %4x\n\n", info->BPB_FATSz32);
       }
-      else if(strcmp(token[0], "stat") == 0)// GOOD Break
+      else if(strcmp(token[0], "stat") == 0)
       {
         // To prevent seg fault. Make sure user enters enough args. Need 2 (3 due to NULL string)
         if(token_count < 3)
@@ -363,13 +367,13 @@ int main()
           {
             printf("Attributes:\tFile Size:\tStarting Cluster Number:\n");
             printf("%-11d\t%-10d\t%-24d\n",dir[i].Attr, dir[i].FileSize, dir[i].FirstClusterLow);
-            printf("%-11x\t%-10x\t%-24x\n\n",dir[i].Attr, dir[i].FileSize, dir[i].FirstClusterLow);
+            //printf("%-11x\t%-10x\t%-24x\n\n",dir[i].Attr, dir[i].FileSize, dir[i].FirstClusterLow);
           }
           else
             printf("Error: File not found\n\n");
         }
       }
-      else if(strcmp(token[0], "get") == 0)// GOOD Break
+      else if(strcmp(token[0], "get") == 0)
       {
         // If not enough parameters entered, warn user and continue on. Don't want to read a NULL
         // string. That will seg fault the program.
@@ -484,25 +488,12 @@ int main()
           // If there are two valid strings delimited by / then it is an absolute path typed in.
           char * cd_cmd_str = (char*) malloc(strlen(token[1])*sizeof(char));
           strncpy(cd_cmd_str, token[1], strlen(token[1]));
-
-          /* Parse input */
           char *cd_token[256];
-
-          int cd_count = 0;                                 
-                                                                
-          // Pointer to point to the token
-          // parsed by strsep
-          char *cd_arg_ptr;                                         
-                                                                
+          int cd_count = 0;                                                                               
+          char *cd_arg_ptr;                                                                                     
           char *cd_working_str  = strdup( cd_cmd_str );                
-
-          // we are going to move the working_str pointer so
-          // keep track of its original value so we can deallocate
-          // the correct amount at the end
           char *cd_working_root = cd_working_str;
-
-          // Tokenize the input stringswith whitespace used as the delimiter
-          while ( ( (cd_arg_ptr = strsep(&cd_working_str, "/\\" ) ) != NULL) && 
+          while ( ( (cd_arg_ptr = strsep(&cd_working_str, "/" ) ) != NULL) && 
                     (cd_count<MAX_NUM_ARGUMENTS))
           {
             cd_token[cd_count] = strndup( cd_arg_ptr, MAX_COMMAND_SIZE );
@@ -519,7 +510,6 @@ int main()
           // Don't try to cd into a file or else system will crash
           uint32_t offset;
           int index, token_index;
-
           for(token_index=0; token_index < cd_count; token_index++)
           {
             index = Find_File(dir, cd_token[token_index]);
@@ -540,7 +530,7 @@ int main()
             }
             else
             {
-              // Can't find the searched directory so it doesn exist
+              // Can't find the searched directory so it doesnt exist
               break;
             }
           }
@@ -554,7 +544,6 @@ int main()
           else
           {
             // Check if absolute address
-            // Check if the root directory to see if starting directory is in root
             Directory_Info(dir, root);
 
             for(token_index=0; token_index < cd_count; token_index++)
@@ -577,7 +566,6 @@ int main()
               }
               else
               {
-                // Can't find the searched directory so it doesn exist
                 break;
               }
             }
@@ -601,7 +589,6 @@ int main()
           int t  = 0;
           for( t = 0; t < cd_count; t ++ ) 
             free(cd_token[t]);
-          free(cd_working_root);
           free(cd_working_str);
           free(cd_cmd_str);
         }
@@ -654,7 +641,8 @@ int main()
           uint32_t offset = 0;
 
           int index = Find_File(dir, token[1]);
-          if(index != -1 && dir[index].Attr == 0x10)
+          if(index != -1 && dir[index].Attr != 0x10 && dir[index].Name[0] != 0xe5 
+          && (dir[index].Attr == 0x01 || dir[index].Attr == 0x20))
           {
             // Use to store the position to offset from and the number of bytes to read in
             int position = atoi(token[2]);
@@ -723,7 +711,7 @@ int main()
             // Print out the bytes read in to display to user
             int i;
             for(i = 0; i < bytes_to_read; i++)
-              printf("%2x ", bytes_read[i]);
+              printf("%-3x", bytes_read[i]);
             printf("\n");
           }
           else
@@ -732,6 +720,10 @@ int main()
           }
         }
       }
+    }
+    else if(fp == NULL)
+    {
+      printf("Error: File system image must be opened first.\n\n");
     }
     free( working_root );
     free(working_str);
